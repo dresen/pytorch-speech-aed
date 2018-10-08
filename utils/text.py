@@ -1,4 +1,5 @@
-
+import re
+from voc import Voc
 
 def make_char_int_maps(textcorpus, zero_map=(' ', '-')):
     """Create the mappings from characters to integers and vice versa. Note that there's a 
@@ -44,6 +45,12 @@ def labels_from_string(string, sym2int, zero_map=(' ', '-')):
     """
     return [0 if x in zero_map else sym2int.get(x) for x in list(string)]
 
+def normalise_string(s, zero_map=(' ', '-')):
+    s = s.lower().strip()
+    s = re.sub(r"[-.!?]", r" ", s)
+    s = re.sub(r" +", r" ", s)
+    return s
+    
 
 
 if __name__ == '__main__':
@@ -56,3 +63,6 @@ if __name__ == '__main__':
     labels = labels_from_string(ref, sym2int)
     print(labels)
     print(''.join(labels_from_string(labels, int2sym)))
+
+
+    
