@@ -1,10 +1,7 @@
-from audio import audiosort
-from text import make_char_int_maps, labels_from_string
-from dataset import AudioSequenceDataset, collate_sequences
 import sys
 
 
-def format_data(audiolist, reflist, sym2int, name='train', partition={}, labels={}):
+def format_data(audiolist, reflist, sym2int, texttransform, name='train', partition={}, labels={}):
     """Formats and partitions the data based on aligned file lists. The function
     can be called multiple times with the a different name and the partition
     is just extended.
@@ -13,6 +10,7 @@ def format_data(audiolist, reflist, sym2int, name='train', partition={}, labels=
         audiolist {list} -- List of paths to audio files
         reflist {list} -- List of reference transcriptions (text)
         sym2int {dict} -- Maps characters to integers
+        texttransfomr {function} -- function that maps a text string to a label string
     
     Keyword Arguments:
         name {str} -- Name of the partition (default: {'train'})
@@ -41,7 +39,7 @@ def format_data(audiolist, reflist, sym2int, name='train', partition={}, labels=
             #print("Skipping {} ...".format(idx))
             skipped += 1
         else:
-            labels[idx] = labels_from_string(x, sym2int)
+            labels[idx] = texttransform(x, sym2int)
     
     print("Skipped {} files".format(skipped))
 
@@ -49,10 +47,12 @@ def format_data(audiolist, reflist, sym2int, name='train', partition={}, labels=
 
 
 if __name__ == "__main__":
-    import torch
     from random import sample
+    import torch
     import torch.utils.data as tud
     from torch.nn.utils.rnn import pad_sequence
+    from text import labels_from_string, make_char_int_maps
+    from audio import audiosort
     audiolist = [x.strip() for x in open("/Users/akirkedal/workdir/speech/data/an4train.list").readlines()]
     reflist = [x.strip() for x in open("/Users/akirkedal/workdir/speech/data/an4train.reference").readlines()]
     translist = [open(x).read().strip() for x in reflist]
@@ -65,34 +65,14 @@ if __name__ == "__main__":
     print("Random -> sorted")
     for e in zip(testlist, sortedlist):
         print("{}\t{}".format(e[0],e[1]))
+    testlens, testlist, testref = zip(*sortedlist)
+    sym2int, int2sym = make_char_int_maps(testref, offset=1)
+    print(sym2int)
+    partition, labels = format_data(testlist, testref, sym2int, labels_from_string)
 
-    sym2int, int2sym = make_char_int_maps(testref)
-    partition, labels = format_data(testlist, testref, sym2int)
-
-    partition, labels = format_data(testlist, testref, sym2int, 
+    partition, labels = format_data(testlist, testref, sym2int, labels_from_string, 
                                     name='eval', partition=partition, labels=labels)
     print("Train:", partition['train'][:3])
     print("Eval:", partition["eval"][:3])
     print("Labels", list(labels.items())[:3])
 
-    print("test dataset class")
-    # Some training parameters
-    use_cuda = torch.cuda.is_available()
-    device = torch.device("cuda" if use_cuda else "cpu")
-    # tud.cudnn.benchmark = True    # Why?
-    params = {'batch_size':2,
-              'shuffle':False,
-              'num_workers':2,
-              'collate_fn':collate_sequences}
-
-
-    trainset = AudioSequenceDataset(partition['train'], labels)
-    
-    traingenerator = tud.DataLoader(trainset, **params, )
-    n = 0
-    for xlens, ylens, xs, ys in traingenerator:
-        print(xlens)
-        print(ylens)
-        print(xs.size())
-        print(ys)
-        break
