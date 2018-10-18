@@ -10,7 +10,7 @@ import utils.data as data
 import utils.text as text
 import utils.audio as audio
 from utils.dataset import AudioDataset, Collate
-from ctc_gru import CTCgrup
+from models.ctc_gru import CTCgrup
 from train import train_ctc
 
 USE_CUDA = torch.cuda.is_available()
