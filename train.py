@@ -14,7 +14,10 @@ def train_iter_ctc(input_sequences, inputlens, target_sequences, targetlens,
     target_sequences = target_sequences.to(device)
     targetlens = targetlens.to(device)
 
-    logprobs = model(input_sequences)
+    if hasattr(model, "pack_unpack"):
+        logprobs = model(input_sequences, inputlens)
+    else:
+        logprobs = model(input_sequences)
     logprobs = logprobs.reshape(-1, batch_size, num_targets + 1)
     loss = ctc_loss(logprobs, target_sequences, inputlens, targetlens)
 

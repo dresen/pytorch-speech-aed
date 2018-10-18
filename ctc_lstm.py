@@ -43,6 +43,7 @@ class CTClstm(torch.nn.Module):
 class CTClstmp(CTClstm):
     def __init__(self, *args, **kwargs):
         super(CTClstmp, self).__init__(*args, **kwargs)
+        self.pack_unpack = True
 
 
     def forward(self, sequences, sequence_lengths):
