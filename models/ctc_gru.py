@@ -3,7 +3,7 @@
 
 import torch
 import torch.nn.functional as F
-from ctc_lstm import SequenceLinear
+from models.ctc_lstm import SequenceLinear
 
 class CTCgru(torch.nn.Module):
     def __init__(self, input_size, output_size, hidden_size, nlayers, dropout=0, bidi=False):
