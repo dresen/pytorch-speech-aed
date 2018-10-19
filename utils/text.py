@@ -1,4 +1,6 @@
 import re
+from voc import Voc
+
 
 def make_char_int_maps(textcorpus, space_map=(' ', '-'), offset=0):
     """Create the mappings from characters to integers and vice versa. Note that there's a 
@@ -49,8 +51,6 @@ def normalise_string(s, space_map=(' ', '-')):
     s = re.sub(r"[-.!?]", r" ", s)
     s = re.sub(r" +", r" ", s)
     return s
-    
-
 
 if __name__ == '__main__':
     reflist = [x.strip() for x in open("/Users/akirkedal/workdir/speech/data/an4train.reference").readlines()]
@@ -62,6 +62,5 @@ if __name__ == '__main__':
     labels = labels_from_string(ref, sym2int)
     print(labels)
     print(''.join(labels_from_string(labels, int2sym)))
-
 
     

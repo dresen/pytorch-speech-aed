@@ -1,7 +1,7 @@
 import sys
 
 
-def format_data(audiolist, reflist, sym2int, texttransform, name='train', partition={}, labels={}):
+def format_data(audiolist, reflist, voc, name='train', partition={}, labels={}):
     """Formats and partitions the data based on aligned file lists. The function
     can be called multiple times with the a different name and the partition
     is just extended.
@@ -34,12 +34,13 @@ def format_data(audiolist, reflist, sym2int, texttransform, name='train', partit
     
     partition[name] = audiolist
     skipped = 0
+    # Ignore an utterance if the path is already in the partitioned data, otherwise add it
     for idx, x in zip(audiolist, reflist):
         if idx in labels:
             #print("Skipping {} ...".format(idx))
             skipped += 1
         else:
-            labels[idx] = texttransform(x, sym2int)
+            labels[idx] = voc.labels_from_chars(x)
     
     print("Skipped {} files".format(skipped))
 
@@ -51,7 +52,7 @@ if __name__ == "__main__":
     import torch
     import torch.utils.data as tud
     from torch.nn.utils.rnn import pad_sequence
-    from text import labels_from_string, make_char_int_maps
+    from voc import Voc, generate_char_voc # labels_from_string, make_char_int_maps
     from audio import audiosort
     audiolist = [x.strip() for x in open("/Users/akirkedal/workdir/speech/data/an4train.list").readlines()]
     reflist = [x.strip() for x in open("/Users/akirkedal/workdir/speech/data/an4train.reference").readlines()]
@@ -66,11 +67,12 @@ if __name__ == "__main__":
     for e in zip(testlist, sortedlist):
         print("{}\t{}".format(e[0],e[1]))
     testlens, testlist, testref = zip(*sortedlist)
-    sym2int, int2sym = make_char_int_maps(testref, offset=1)
-    print(sym2int)
-    partition, labels = format_data(testlist, testref, sym2int, labels_from_string)
+    voc = generate_char_voc(testref, "LE TEST")
+    #sym2int, int2sym = make_char_int_maps(testref, offset=1)
+    print(voc.word2index)
+    partition, labels = format_data(testlist, testref, voc)
 
-    partition, labels = format_data(testlist, testref, sym2int, labels_from_string, 
+    partition, labels = format_data(testlist, testref, voc, 
                                     name='eval', partition=partition, labels=labels)
     print("Train:", partition['train'][:3])
     print("Eval:", partition["eval"][:3])

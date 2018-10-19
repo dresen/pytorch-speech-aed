@@ -1,7 +1,6 @@
 """Here are some functions to train recurrent neural network with ctc loss
 """
 
-
 import torch
 import os
 
@@ -27,10 +26,11 @@ def train_iter_ctc(input_sequences, inputlens, target_sequences, targetlens,
 
     return loss.item()
 
-def train_ctc(modelname, corpusname, dataset, sym2int, int2sym,
+def train_ctc(modelname, corpusname, dataset, voc,
               model, optimiser, save_dir, epochs=20, 
               batch_size=8, print_every=1, save_every=100, clip=0.0,
               device='cpu', start_epoch=1):
+    assert voc._mode == 'ctc', "Wrong vocabulary mode - should be 'ctc', but is {}".format(voc._mode)
     # init 
     print("Initialising...")
     print_loss = 0
@@ -42,7 +42,7 @@ def train_ctc(modelname, corpusname, dataset, sym2int, int2sym,
     for epoch in range(start_epoch, epochs + 1):
         for xlens, ylens, xs, ys in dataset:
             loss = train_iter_ctc(xs, xlens, ys, ylens, model, optimiser,
-                                  batch_size, len(sym2int), clip, device, ctc_loss=ctc)
+                                  batch_size, len(voc), clip, device, ctc_loss=ctc)
 
             print_loss += loss
 
@@ -63,8 +63,7 @@ def train_ctc(modelname, corpusname, dataset, sym2int, int2sym,
                         'mdl':model.state_dict(),
                         'opt':optimiser.state_dict(),
                         'loss': loss,
-                        'sym2int': sym2int,
-                        'int2sym': int2sym,
+                        'voc': voc.__dict__,
                     }, os.path.join(outdir, "{}-{}.tar".format(epoch, 'checkpoint')))
             iter += 1
         
@@ -75,10 +74,11 @@ if __name__ == "__main__":
     import torch.utils.data as tud
     from random import sample
     import utils.data as data
-    import utils.text as text
+    # import utils.text as text
     import utils.audio as audio
     from utils.dataset import AudioDataset, Collate
-    from ctc_lstm import CTClstm
+    from models.ctc_gru import CTCgru
+    from utils.voc import generate_char_voc
 
     USE_CUDA = torch.cuda.is_available()
     device = torch.device("cuda" if USE_CUDA else "cpu")
@@ -93,8 +93,9 @@ if __name__ == "__main__":
     sortedlist = audio.audiosort(testlist, list_of_references=testref)
     testlist, testref = zip(*sortedlist)
  
-    sym2int, int2sym = text.make_char_int_maps(testref, offset=1)
-    partition, labels = data.format_data(testlist, testref, sym2int, text.labels_from_string)
+    voc = generate_char_voc(testref, "LE TEST")
+    # sym2int, int2sym = text.make_char_int_maps(testref, offset=1)
+    partition, labels = data.format_data(testlist, testref, voc)
 
     trainset = AudioDataset(partition['train'], labels, audio.mfcc)
     ctc_batch_fn = Collate(-1)
@@ -107,14 +108,14 @@ if __name__ == "__main__":
 
     allloss = 0
     traingenerator = tud.DataLoader(trainset, **params, )
-    model = CTClstm(40, len(sym2int), 120, 2)
+    model = CTCgru(40, len(voc), 120, 2)
     model.to(device)
     optimiser = torch.optim.SGD(model.parameters(),
                                 lr=0.01)
 
     print("Test train_ctc() (and train_iter_ctc())")
     try:
-        train_ctc("traintest", "AN4", traingenerator, sym2int, int2sym,
+        train_ctc("traintest", voc.name, traingenerator, voc,
                   model,optimiser, "an4test", epochs=50, batch_size=bsz,
                   print_every=2, save_every=100, clip=0.0, device=device)
     except KeyboardInterrupt:

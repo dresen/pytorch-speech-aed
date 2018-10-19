@@ -82,7 +82,8 @@ if __name__ == "__main__":
     from torchnlp.samplers import BPTTBatchSampler
     from random import sample
     from audio import audiosort, mfcc
-    from data import format_data, make_char_int_maps
+    from voc import generate_char_voc
+    from data import format_data #, make_char_int_maps
     audiolist = [x.strip() for x in open("/Users/akirkedal/workdir/speech/data/an4train.list").readlines()]
     reflist = [x.strip() for x in open("/Users/akirkedal/workdir/speech/data/an4train.reference").readlines()]
     translist = [open(x).read().strip() for x in reflist]
@@ -92,9 +93,9 @@ if __name__ == "__main__":
     testref = [translist[x] for x in idxs]
     sortedlist = audiosort(testlist, list_of_references=testref)
     testlist, testref = zip(*sortedlist)
- 
-    sym2int, int2sym = make_char_int_maps(testref, offset=1)
-    partition, labels = format_data(testlist, testref, sym2int)
+    voc = generate_char_voc(testref, "LE TEST")
+    #sym2int, int2sym = make_char_int_maps(testref, offset=1)
+    partition, labels = format_data(testlist, testref, voc)
 
     print("test dataset class")
     trainset = AudioDataset(partition['train'], labels, wavtransform=mfcc)
@@ -105,7 +106,7 @@ if __name__ == "__main__":
               'collate_fn':ctc_batch_fn}
 
 
-    traingenerator = tud.DataLoader(trainset, **params, )
+    traingenerator = tud.DataLoader(trainset, **params)
     n = 0
     for xlens, ylens, xs, ys in traingenerator:
         print(xlens)

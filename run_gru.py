@@ -4,11 +4,13 @@ end-to-end
 
 import sys
 import torch
+
 import torch.utils.data as tud
 from random import sample
+
 import utils.data as data
-import utils.text as text
 import utils.audio as audio
+from utils.voc import generate_char_voc
 from utils.dataset import AudioDataset, Collate
 from models.ctc_gru import CTCgrup
 from train import train_ctc
@@ -24,8 +26,9 @@ translist = [open(x).read().strip() for x in reflist]
 sortedlist = audio.audiosort(audiolist, list_of_references=translist)
 trainlist, trainref = zip(*sortedlist)
 
-sym2int, int2sym = text.make_char_int_maps(trainref, offset=1)
-partition, labels = data.format_data(trainlist, trainref, sym2int, text.labels_from_string)
+
+voc = generate_char_voc(trainref, "TRAIN", mode='ctc')
+partition, labels = data.format_data(trainlist, trainref, voc)
 
 trainset = AudioDataset(partition['train'], labels, audio.mfcc)
 ctc_batch_fn = Collate(-1, longest_first=True )
@@ -37,13 +40,13 @@ params = {'batch_size': bsz,
             'drop_last': True}
 
 datagenerator = tud.DataLoader(trainset, **params, )
-model = CTCgrup(40, len(sym2int), 120, 2)
+model = CTCgrup(40, len(voc), 120, 2)
 model.to(device)
 optimiser = torch.optim.SGD(model.parameters(),
-                            lr=0.01)
+                            lr=0.005)
 try:
 
-    train_ctc("traintest", "AN4", datagenerator, sym2int, int2sym,
+    train_ctc("traintest", "AN4", datagenerator, voc,
               model,optimiser, "an4test", epochs=20, batch_size=bsz,
               print_every=2, save_every=0, clip=5.0, device=device)
 except KeyboardInterrupt:
