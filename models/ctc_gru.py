@@ -13,14 +13,18 @@ class BaseGru(torch.nn.Module):
         self.hsz = hidden_size
         self.nlayers = nlayers
         self.dropout = dropout
+        self.directions = 2 if bidi else 1
 
-        self.encoder = torch.nn.GRU(self.isz, self.hsz, dropout=self.dropout, 
+        self.encoder = torch.nn.GRU(self.isz, self.hsz, self.nlayers, dropout=self.dropout, 
         batch_first=True, bidirectional=bidi)
 
     def forward(self, sequences, sequence_lengths, hidden=None):
         packed = torch.nn.utils.rnn.pack_padded_sequence(sequences, sequence_lengths, batch_first=True)
         enc_out, _ = self.encoder(packed, hidden)
         unpacked, _ = torch.nn.utils.rnn.pad_packed_sequence(enc_out, batch_first=True)
+        if self.directions == 2:
+            # Sum both directions
+            unpacked = unpacked[:,:,:self.hsz] + unpacked[:,:,self.hsz:]
         return unpacked
 
 
@@ -56,9 +60,13 @@ class CTCgrup(BaseGru):
 
         self.logsoftmax = torch.nn.LogSoftmax(2)
 
-    def forward(self, sequences, sequence_lengths):
+    def forward(self, sequences, sequence_lengths, hidden_state=None):
         packed = torch.nn.utils.rnn.pack_padded_sequence(sequences, sequence_lengths, batch_first=True)
-        enc_out, _ = self.encoder(packed)
+        enc_out, _ = self.encoder(packed, hidden_state)
         unpacked, _ = torch.nn.utils.rnn.pad_packed_sequence(enc_out, batch_first=True)
+        unpacked, _ = torch.nn.utils.rnn.pad_packed_sequence(enc_out, batch_first=True)
+        if self.directions == 2:
+            # Sum both directions
+            unpacked = unpacked[:,:,:self.hsz] + unpacked[:,:,self.hsz:]
         dec_out = self.decoder(unpacked)
         return self.logsoftmax(dec_out)
