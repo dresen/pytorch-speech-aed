@@ -12,7 +12,7 @@ import utils.data as data
 import utils.audio as audio
 from utils.voc import generate_char_voc
 from utils.dataset import AudioDataset, Collate
-from models.ctc_gru import CTCgrup
+from models.ctc import CTCgrup
 from train import train_ctc
 
 USE_CUDA = torch.cuda.is_available()
@@ -31,6 +31,7 @@ voc = generate_char_voc(trainref, "TRAIN", mode='ctc')
 partition, labels = data.format_data(trainlist, trainref, voc)
 
 trainset = AudioDataset(partition['train'], labels, audio.mfcc)
+# Longest_first is required when we pack the input
 ctc_batch_fn = Collate(-1, longest_first=True )
 bsz = 8
 params = {'batch_size': bsz,
@@ -40,7 +41,7 @@ params = {'batch_size': bsz,
             'drop_last': True}
 
 datagenerator = tud.DataLoader(trainset, **params, )
-model = CTCgrup(40, len(voc), 120, 2)
+model = CTCgrup(40, len(voc), 120, 2, dropout=0.1, bidi=False)
 model.to(device)
 optimiser = torch.optim.SGD(model.parameters(),
                             lr=0.005)
