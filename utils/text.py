@@ -1,6 +1,4 @@
 import re
-from voc import Voc
-
 
 def make_char_int_maps(textcorpus, space_map=(' ', '-'), offset=0):
     """Create the mappings from characters to integers and vice versa. Note that there's a 

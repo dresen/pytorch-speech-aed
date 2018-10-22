@@ -1,3 +1,7 @@
+"""Implementation of several types of Attention that I've stolen from the chatbot
+tutorial on the pytorch website. Added the scaled dot score
+"""
+
 import sys
 import torch
 import torch.nn as nn
@@ -15,20 +19,21 @@ class Attention(nn.Module):
     def __init__(self, method, hidden_size):
         super(Attention, self).__init__()
         self.method = method
-        if self.method not in ['dot', 'general', 'concat']:
+        if self.method not in ['dot', 'general', 'concat', 'scaled_dot']:
             raise ValueError(self.method, 'is not an appropriate attention method')
-        self.hidden_size = hidden_size
+        self.hsz = hidden_size
         if self.method == 'general':
-            self.attn = nn.Linear(self.hidden_size, self.hidden_size)
+            self.attn = nn.Linear(self.hsz, self.hsz)
         elif self.method == 'concat':
-            self.attn = nn.Linear(self.hidden_size * 2, self.hidden_size)
-            self.v = nn.Parameter(torch.Tensor(self.hidden_size))
+            self.attn = nn.Linear(self.hsz * 2, self.hsz)
+            self.v = nn.Parameter(torch.Tensor(self.hsz))
 
     def dot_score(self, hidden, enc_output):
         return torch.sum(hidden * enc_output, dim=2)
 
-    def scaled_dot_score(self, hidden, enc_output, lengths):
-        return torch.div(torch.sum(hidden * enc_output, dim=2), torch.sqrt(length))
+    def scaled_dot_score(self, hidden, enc_output):
+        #untestet
+        return torch.div(torch.sum(hidden * enc_output, dim=2), torch.sqrt(self.hsz))
 
     def general_score(self, hidden, enc_output):
         energy = self.attn(enc_output)
@@ -46,8 +51,8 @@ class Attention(nn.Module):
             attn_energies = self.concat_score(hidden, enc_output)
         elif self.method == 'dot':
             attn_energies = self.dot_score(hidden, enc_output)
-        elif self.method == 'scaled':
-            attn_energies = self.dot_score(hidden, enc_output, lengths)
+        elif self.method == 'scaled_dot':
+            attn_energies = self.scaled_dot_score(hidden, enc_output)
 
         # Switch max len and batch size dimensions
         attn_energies = attn_energies.t()

@@ -5,7 +5,7 @@ import torch
 import os
 
 
-def train_iter_ctc(input_sequences, inputlens, target_sequences, targetlens,
+def ctc_iter(input_sequences, inputlens, target_sequences, targetlens,
                model, optimiser, batch_size, num_targets, clip, device, ctc_loss):
     optimiser.zero_grad()
     input_sequences = input_sequences.to(device)
@@ -41,7 +41,7 @@ def train_ctc(modelname, corpusname, dataset, voc,
     print("training...")
     for epoch in range(start_epoch, epochs + 1):
         for xlens, ylens, xs, ys in dataset:
-            loss = train_iter_ctc(xs, xlens, ys, ylens, model, optimiser,
+            loss = ctc_iter(xs, xlens, ys, ylens, model, optimiser,
                                   batch_size, len(voc), clip, device, ctc_loss=ctc)
 
             print_loss += loss
@@ -67,6 +67,27 @@ def train_ctc(modelname, corpusname, dataset, voc,
                     }, os.path.join(outdir, "{}-{}.tar".format(epoch, 'checkpoint')))
             iter += 1
         
+
+
+def attention_iter(input_sequences, inputlens, target_sequences, targetlens,
+               encoder, decoder, enc_optimiser, dec_optimiser, batch_size,
+               teacher_forcing_ratio, num_targets, clip, device, ctc_loss):
+
+    enc_optimiser.zero_grad()
+    dec_optimiser.zero_grad()
+    input_sequences = input_sequences.to(device)
+    inputlens = inputlens.to(device)
+    target_sequences = target_sequences.to(device)
+    max_targetlen = torch.max(targetlens)
+    targetlens = targetlens.to(device)
+    max_targetlen = max_targetlen.to(device)
+
+    # Pass entire sequence through decoder
+    enc_out, enc_hidden_state = encoder(input_sequences, inputlens)
+
+    # Init decoder input
+    dec_input = torch.LongTensor([[SOS_token] * batch_size])
+
 
 if __name__ == "__main__":
     import sys
