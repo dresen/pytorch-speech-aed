@@ -3,7 +3,7 @@
 
 import torch
 import torch.nn.functional as F
-from models.ctc import SequenceLinear
+from models.lstm import SequenceLinear
 
 class BaseGru(torch.nn.Module):
     """Base class for recurrent net with GRU units that can work a
@@ -15,10 +15,9 @@ class BaseGru(torch.nn.Module):
     Returns:
         BaseGru -- A GRU-based recurrent net
     """
-    def __init__(self, input_size, output_size, hidden_size, nlayers, dropout=0, bidi=False):
+    def __init__(self, input_size, hidden_size, nlayers, dropout=0, bidi=False):
         super(BaseGru, self).__init__()
         self.isz = input_size      # Number of features
-        self.osz = output_size
         self.hsz = hidden_size
         self.nlayers = nlayers
         self.dropout = dropout
@@ -71,10 +70,10 @@ class CTCgrup(BaseGru):
     Returns:
         CTCGrup -- A NN we can train with CTC
     """
-    def __init__(self, *args, **kwargs):
-        super(CTCgrup, self).__init__(*args, **kwargs)
+    def __init__(self, input_size, output_size, hidden_size, nlayers, dropout=0, bidi=False):
+        super(CTCgrup, self).__init__(input_size, hidden_size, nlayers, dropout=0, bidi=False)
         self.pack_unpack = True
-        self.osz += 1
+        self.osz = output_size + 1
         self.decoder = SequenceLinear(self.hsz, self.osz)
 
         self.logsoftmax = torch.nn.LogSoftmax(2)
