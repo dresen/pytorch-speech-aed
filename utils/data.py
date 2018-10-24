@@ -9,8 +9,7 @@ def format_data(audiolist, reflist, voc, name='train', partition={}, labels={}):
     Arguments:
         audiolist {list} -- List of paths to audio files
         reflist {list} -- List of reference transcriptions (text)
-        sym2int {dict} -- Maps characters to integers
-        texttransfomr {function} -- function that maps a text string to a label string
+        voc {Voc} -- Maps characters to integers and vice versa
     
     Keyword Arguments:
         name {str} -- Name of the partition (default: {'train'})
@@ -18,7 +17,7 @@ def format_data(audiolist, reflist, voc, name='train', partition={}, labels={}):
         labels {dict} -- Maps labels to audio  (default: {{}})
     
     Returns:
-        [dict,dict] -- the data partition table and an audio-to-reference table
+        Tuple(dict,dict) -- the data partition table and an audio-to-reference table
     """
     # Make sure we've got the right amount of data
     num_audio = len(audiolist)
@@ -68,7 +67,6 @@ if __name__ == "__main__":
         print("{}\t{}".format(e[0],e[1]))
     testlens, testlist, testref = zip(*sortedlist)
     voc = generate_char_voc(testref, "LE TEST")
-    #sym2int, int2sym = make_char_int_maps(testref, offset=1)
     print(voc.word2index)
     partition, labels = format_data(testlist, testref, voc)
 
