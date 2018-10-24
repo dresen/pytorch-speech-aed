@@ -39,7 +39,6 @@ params = {'batch_size': bsz,
 
 datagenerator = tud.DataLoader(trainset, **params, )
 model = CTClstmp(40, len(voc), 120, 2)
-model.to(device)
 optimiser = torch.optim.SGD(model.parameters(),
                             lr=0.01)
 try:
