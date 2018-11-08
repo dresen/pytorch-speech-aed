@@ -10,7 +10,7 @@ class LuongAttentionDecoderRNN(nn.Module):
     Returns:
       LuongAttentionDecoderRNN -- Decoder RNN network
     """
-    def __init__(self, attnModel, input_size, hidden_size, output_size, nlayers=1, dropout=0.1):
+    def __init__(self, attnModel, embedding, input_size, hidden_size, output_size, nlayers=1, dropout=0.1):
         super(LuongAttentionDecoderRNN, self).__init__()
         self.attn_mdl = attnModel
         self.isz = input_size
@@ -20,6 +20,8 @@ class LuongAttentionDecoderRNN(nn.Module):
         self.dropout = dropout
 
         # Layers
+        self.embedding = embedding
+        self.embed_dropout = nn.Dropout(dropout)
         self.gru = nn.GRU(input_size, hidden_size, nlayers, 
                           dropout=(0 if nlayers == 1 else dropout))
         # Calculate attention weights with a specified model
@@ -46,8 +48,15 @@ class LuongAttentionDecoderRNN(nn.Module):
         """
         # We run this method one frame at a time, so input_step is 
         # a speech frame like MFCC
+ 
+        embedded_input = self.embedding(input_step)
+        embedded_input = self.embed_dropout(embedded_input)
+        #print(input_step.size())
+        #print('(', embedded_input.size(),')')
+        #print(last_hidden.size())
+        #print(enc_output.size())
         # Forward pass 
-        rnn_output, hidden = self.gru(input_step, last_hidden)
+        rnn_output, hidden = self.gru(embedded_input, last_hidden)
         # compute atttention weights for the current steo
         attn_weights = self.attn(rnn_output, enc_output)
         # compute the new "weighted sum" context vector
