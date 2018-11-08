@@ -44,7 +44,9 @@ class AudioDataset(tud.Dataset):
             tuple(IntTensor, IntTensor, FloatTensor, FloatTensor) -- [description]
         """
         fname = self.files[index]
+        # shape is num samples * feature dim
         x = torch.FloatTensor(self.wavtransform(fname))
+        # shape is num samples * 1
         y = torch.IntTensor(self.labels[fname])
 
         return x.size()[0], y.size()[0], x, y

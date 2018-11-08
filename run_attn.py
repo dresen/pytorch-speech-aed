@@ -49,20 +49,20 @@ voc = generate_char_voc(trainref, "TRAIN", mode='enc-dec')
 partition, labels = data.format_data(trainlist, trainref, voc)
 
 # Create the torch formatted training data and data functions
-trainset = AudioDataset(partition['train'], labels, audio.mfcc)
+trainset = AudioDataset(partition['train'], labels, audio.mfcc_delta)
 # Longest_first is required when we pack the input
-ctc_batch_fn = Collate(PAD_token, longest_first=True )
+batch_fn = Collate(PAD_token, longest_first=True )
 bsz = 8
 params = {'batch_size': bsz,
             'shuffle':False,
             'num_workers':2,
-            'collate_fn':ctc_batch_fn,
+            'collate_fn':batch_fn,
             'drop_last': True}
 
 embedding = torch.nn.Embedding(voc.num_words, hidden_size, padding_idx=PAD_token)
 
 datagenerator = tud.DataLoader(trainset, **params)
-encoder = BaseGru(40, hidden_size, encoder_nlayers, dropout=0.1, bidi=True)
+encoder = BaseGru(120, hidden_size, encoder_nlayers, dropout=0.1, bidi=True)
 decoder = AttentionDecoder(attn_model, embedding, hidden_size, hidden_size, 
                            voc.num_labels, decoder_nlayers, dropout=dropout)
 

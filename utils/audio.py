@@ -4,9 +4,11 @@ with pytorch
 """
 
 import librosa as lr
+import warnings
 
+from numpy import vstack
 
-def mfcc(audiofile, samplerate=8000, num_cepstra=40, start=0.0, stop=0.0):
+def raw_mfcc(audiofile, samplerate=8000, num_cepstra=40, start=0.0, stop=0.0, delta=False):
     """Extracts MFCC features from an audio file with optional segmentation
     
     Arguments:
@@ -29,7 +31,36 @@ def mfcc(audiofile, samplerate=8000, num_cepstra=40, start=0.0, stop=0.0):
     # Takes the log_10
     log_signal = lr.power_to_db(signal)
     # Matrix shape is (num_cepstra, n_samples)
-    feats = lr.feature.mfcc(S=log_signal, n_mfcc=num_cepstra)
+    return lr.feature.mfcc(S=log_signal, n_mfcc=num_cepstra)
+
+def mfcc(audiofile, samplerate=8000, num_cepstra=40, start=0.0, stop=0.0):
+    return raw_mfcc(audiofile, samplerate, num_cepstra, start, stop).T
+
+
+def mfcc_delta(audiofile, samplerate=8000, num_cepstra=40, start=0.0, stop=0.0):
+    """Extracts MFCC features from an audio file with optional segmentation
+    
+    Arguments:
+        audiofile {string} -- Path to audio file
+    
+    Keyword Arguments:
+        samplerate {int} -- Sample rate we want to downsample to (default: {8000})
+        num_cepstra {int} -- Feature length (default: {40})
+        start {float} -- Optional start time (default: {0.0})
+        stop {float} -- Optional stop time (default: {0.0})
+    
+    Returns:
+        np.ndarray -- Samples X Features matrix of MFCC feature
+    """
+    # shape is (num_cepstra, n_samples)
+    feats = raw_mfcc(audiofile, samplerate, num_cepstra, start, stop)
+    with warnings.catch_warnings():
+        # Catch FutureWarning in scipy that we can't fix
+        warnings.simplefilter("ignore")
+        d = lr.feature.delta(feats)
+        dd = lr.feature.delta(feats, order=2)
+        feats = vstack((feats, d, dd))
+    # shape is (num_samples, num_cepstra*3)
     return feats.T  # Transpose so we iterate over samples in loops
 
 
@@ -84,6 +115,8 @@ if __name__ == "__main__":
     testlist = sample(audiolist, 10)
     sortedlist = audiosort(testlist, return_duration=True)
     print("Random -> sorted")
-    for e in zip(testlist, sortedlist):
+    for e in zip(testlist[:3], sortedlist[:3]):
         print("{}\t{}".format(e[0],e[1]))
+    testing2 = mfcc_delta(audiolist[1])
+    print("Shape is {0} (samples x features)".format(testing2.shape))
     
