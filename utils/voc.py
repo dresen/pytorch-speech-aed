@@ -1,5 +1,5 @@
 # Default word tokens
-PAD_token = -1  # Used for padding short sequences
+PAD_token = 0  # Used for padding short sequences
 SOS_token = 1  # Start-of-sentence token
 EOS_token = 2  # End-of-sentence token
 
@@ -128,7 +128,7 @@ class Voc:
             self.add_word(word)
 
     def __len__(self):
-        return len(self.word2index)
+        return len(self.num_labels)
 
 
 def generate_char_voc(text_corpus, name, mode='ctc', space_map=['-']):

@@ -72,14 +72,14 @@ class Collate:
 
         return srclengths, tgtlengths, padded_feats, padded_labels
         
-    def __call__(self,batch):
+    def __call__(self, batch):
         return self.collate_sequences(batch)
 
 
 if __name__ == "__main__":
     import torch
     import torch.utils.data as tud
-    from torchnlp.samplers import BPTTBatchSampler
+    # from torchnlp.samplers import BPTTBatchSampler
     from random import sample
     from audio import audiosort, mfcc
     from voc import generate_char_voc
@@ -109,8 +109,8 @@ if __name__ == "__main__":
     traingenerator = tud.DataLoader(trainset, **params)
     n = 0
     for xlens, ylens, xs, ys in traingenerator:
-        print(xlens)
-        print(ylens)
+        print(xlens.size())
+        print(ylens.size())
         print(xs.size())
-        print(ys)
+        print(ys.size())
         break
