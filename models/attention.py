@@ -7,6 +7,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from math import sqrt
+
 class Attention(nn.Module):
     """Attention layer with supprt for different attention mechanisms
     
@@ -33,7 +35,7 @@ class Attention(nn.Module):
 
     def scaled_dot_score(self, hidden, enc_output):
         #untestet
-        return torch.div(torch.sum(hidden * enc_output, dim=2), torch.sqrt(self.hsz))
+        return torch.div(torch.sum(hidden * enc_output, dim=2), sqrt(self.hsz))
 
     def general_score(self, hidden, enc_output):
         energy = self.attn(enc_output)

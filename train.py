@@ -4,13 +4,13 @@
 import torch
 import os
 
-from utils.voc import PAD_token
-
+from utils.voc import PAD_token, SOS_token
 
 def maskNLLLoss(inp, target, mask):
+    ntotal = mask.sum()
     crossEntropy = -torch.log(torch.gather(inp, 1, target.view(-1, 1)))
     loss = crossEntropy.masked_select(mask).mean()
-    return loss
+    return loss, ntotal.item()
 
 
 def binary_mask(tensor, padding_value=PAD_token):
@@ -41,9 +41,8 @@ def ctc_iter(input_sequences, inputlens, target_sequences, targetlens,
         logprobs = model(input_sequences, inputlens)
     else:
         logprobs = model(input_sequences)
-    logprobs = logprobs.reshape(-1, batch_size, num_targets + 1)
-    loss = ctc_loss(logprobs, target_sequences, inputlens, targetlens)
-    loss.to(device)
+    # Switch order of batch and sequence dimensions
+    loss = ctc_loss(logprobs.transpose(0,1), target_sequences, inputlens, targetlens)
 
     loss.backward()
     _ = torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
@@ -100,14 +99,14 @@ def train_ctc(modelname, corpusname, dataset, voc,
 
 
 def attention_iter(input_sequences, inputlens, target_sequences, targetlens,
-               encoder, decoder, enc_optimiser, dec_optimiser, batch_size,
+               encoder, decoder, encoder_optimiser, decoder_optimiser, batch_size,
                teacher_forcing_ratio, clip, device):
     # Optimisers
-    enc_optimiser.zero_grad()
-    dec_optimiser.zero_grad()
+    encoder_optimiser.zero_grad()
+    decoder_optimiser.zero_grad()
 
     # Init decoder input and vars
-    dec_input = torch.LongTensor([[SOS_token] * batch_size])
+    dec_input = torch.LongTensor([[SOS_token for _ in range(batch_size)]])
     max_targetlen = torch.max(targetlens)
     mask = binary_mask(target_sequences)
 
@@ -116,18 +115,25 @@ def attention_iter(input_sequences, inputlens, target_sequences, targetlens,
     targetlens = targetlens.to(device)
     max_targetlen = max_targetlen.to(device)
     inputlens = inputlens.to(device)
-    mask.to(device)
+    mask = mask.to(device)
+    dec_input = dec_input.to(device)
 
     # some vars
     loss = 0.0
     print_losses = []
+    ntotals = 0.0
 
     # Pass entire sequence through decoder
     enc_out, enc_hidden_state = encoder(input_sequences, inputlens)
-    dec_input = dec_input.to(device)
+    
+    # print(enc_hidden_state.size())
+    enc_out = enc_out.transpose(0,1)
+    target_sequences = target_sequences.transpose(0,1).long()
+    mask = mask.transpose(0,1)
 
     # First decoder state is the last hidden _encoder_ state
     dec_hidden_state = enc_hidden_state[:decoder.nlayers]
+    # dec_input = torch.ones(1, batch_size, dec_hidden_state.size()[-1]) * SOS_token
 
     # Use teacher forcing? True if inequality holds, else False
     teacher_forcing = torch.rand(1, 1).item() < teacher_forcing_ratio
@@ -138,25 +144,27 @@ def attention_iter(input_sequences, inputlens, target_sequences, targetlens,
         for step in range(max_targetlen):
             # 1 frame at a time
             dec_out, dec_hidden_state = decoder(dec_input, dec_hidden_state, enc_out)        
-            # We need to make sure the dims fit
-            dec_input = target_sequences[step].reshape(1, -1)
+            # We need to make sure the dims fit and cast dtype as torch.long so we can embed
+            dec_input = target_sequences[step,:].unsqueeze(0).long()
             # mask out the padding when we calculate loss
-            maskloss = maskNLLLoss(dec_out, target_sequences[step], mask[step])
+            maskloss, ntotal = maskNLLLoss(dec_out, target_sequences[step], mask[step])
             # we need to backprop loss for the entire sequence
             loss += maskloss
             # Use .item() so we don't pass gradients past sequences
-            print_losses.append(maskloss.item() * targetlens[step])
-
+            print_losses.append(maskloss.item() * ntotal)
+            ntotals += ntotal
     else:
         for step in range(max_targetlen):
+            print('1best', step)
             dec_out, dec_hidden_state = decoder(dec_input, dec_hidden_state, enc_out)
             # Select best prediction
             _, onebest = dec_out.topk(1)
             # Reshape output to become the input vector from the previous time step
             dec_input = torch.Tensor([onebest[i][0] for i in range(batch_size)]).long()
-            maskloss = maskNLLLoss(dec_out, target_sequences[step], mask[step])
+            maskloss, ntotal = maskNLLLoss(dec_out, target_sequences[step], mask[step])
             loss += maskloss
-            print_losses.append(maskloss.item() * targetlens[step])
+            print_losses.append(maskloss.item() * ntotal)
+            ntotals += ntotal
 
 
     loss.backward()
@@ -164,16 +172,16 @@ def attention_iter(input_sequences, inputlens, target_sequences, targetlens,
     _ = torch.nn.utils.clip_grad_norm_(encoder.parameters(), clip)
     _ = torch.nn.utils.clip_grad_norm_(decoder.parameters(), clip)
 
-    encoder_optimizer.step()
-    decoder_optimizer.step()
+    encoder_optimiser.step()
+    decoder_optimiser.step()
 
-    return sum(print_losses) / targetlens.sum()
+    return sum(print_losses) / ntotals
 
 
 def train_attention(modelname, corpusname, dataset, voc,
               encoder, decoder, enc_optimiser, dec_optimiser, save_dir, epochs=20, 
               batch_size=8, print_every=1, save_every=100, clip=0.1,
-              device='cpu', start_epoch=1):
+              device='cpu', start_epoch=1, teacher_forcing_ratio=0.5):
 
     assert voc._mode == 'enc-dec', "Wrong vocabulary mode - should be 'enc-dec', but is {}".format(voc._mode)
     # init 
@@ -181,24 +189,25 @@ def train_attention(modelname, corpusname, dataset, voc,
     print_loss = 0
     total_iterations = epochs * len(dataset)
     iter = 0
-    model.train()
+    encoder.train()
+    decoder.train()
 
-    model.to(device)
-    optimiser.to(device)
-
+    encoder.to(device)
+    decoder.to(device)
 
     print("training...")
     for epoch in range(start_epoch, epochs + 1):
         for xlens, ylens, xs, ys in dataset:
             loss = attention_iter(xs, xlens, ys, ylens, encoder, decoder, enc_optimiser, dec_optimiser,
-                                  batch_size, teacher_forcing_ratio, clip, device)
+                                      batch_size, teacher_forcing_ratio, clip, device)
+            # Just used for reporting        
             print_loss += loss
 
             # report progress
             if iter % print_every == 0:
                 print_loss_avg = print_loss / print_every
-                print("Epoch {}; % complete: {:.1f}%; Average loss: {:.4f}".format(
-                      epoch, iter/total_iterations*100, print_loss_avg))
+                print("Epoch {}; Iter {}; % complete: {:.1f}%; Average loss: {:.4f}".format(
+                      epoch, iter, iter/total_iterations*100, print_loss_avg))
                 print_loss = 0 # reset ?
             if bool(save_every):
                 if iter % save_every == 0:
@@ -226,7 +235,7 @@ if __name__ == "__main__":
     import utils.data as data
     import utils.audio as audio
     from utils.dataset import AudioDataset, Collate
-    from models.gru import CTCgru
+    from models.gru import CTCgrup
     from utils.voc import generate_char_voc
 
     USE_CUDA = torch.cuda.is_available()
@@ -256,7 +265,7 @@ if __name__ == "__main__":
 
     allloss = 0
     traingenerator = tud.DataLoader(trainset, **params, )
-    model = CTCgru(40, len(voc), 120, 2)
+    model = CTCgrup(40, len(voc), 120, 2)
     model.to(device)
     optimiser = torch.optim.SGD(model.parameters(),
                                 lr=0.01)
