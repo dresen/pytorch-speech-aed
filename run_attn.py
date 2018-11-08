@@ -10,9 +10,10 @@ from random import sample
 
 import utils.data as data
 import utils.audio as audio
-from utils.voc import generate_char_voc
+from utils.voc import generate_char_voc, PAD_token
 from utils.dataset import AudioDataset, Collate
 from models.gru import BaseGru
+from models.decoder import LuongAttentionDecoderRNN as AttentionDecoder
 from train import train_attention 
 
 USE_CUDA = torch.cuda.is_available()
@@ -20,14 +21,14 @@ device = torch.device("cuda" if USE_CUDA else "cpu")
 
 
 clip = 50.0
-teacher_forcing_ratio = 1.5
-learning_rate = 0.0001
+teacher_forcing_ratio = 1.0 # Debug option !!!
+learning_rate = 0.001
 decoder_learning_ratio = 5.0 # ???
 model_name = 'cb_model'
-attn_model = 'dot'
-hidden_size = 200
-encoder_n_layers = 2
-decoder_n_layers = 2
+attn_model = 'scaled_dot'
+hidden_size = 400
+encoder_nlayers = 2
+decoder_nlayers = 2
 dropout = 0.1
 batch_size = 8
 
@@ -43,14 +44,14 @@ translist = [open(x).read().strip() for x in reflist]
 sortedlist = audio.audiosort(audiolist, list_of_references=translist)
 trainlist, trainref = zip(*sortedlist)
 
-# Define the voacbulary, integer maps and parition the data
+# Define the vocabulary, integer maps and parition the data
 voc = generate_char_voc(trainref, "TRAIN", mode='enc-dec')
 partition, labels = data.format_data(trainlist, trainref, voc)
 
 # Create the torch formatted training data and data functions
 trainset = AudioDataset(partition['train'], labels, audio.mfcc)
 # Longest_first is required when we pack the input
-ctc_batch_fn = Collate(-1, longest_first=True )
+ctc_batch_fn = Collate(PAD_token, longest_first=True )
 bsz = 8
 params = {'batch_size': bsz,
             'shuffle':False,
@@ -58,17 +59,26 @@ params = {'batch_size': bsz,
             'collate_fn':ctc_batch_fn,
             'drop_last': True}
 
-datagenerator = tud.DataLoader(trainset, **params)
-model = CTCgrup(40, len(voc), 120, 2, dropout=0.1, bidi=True)
-encoder = BaseGru(40, hidden_size, 2, dropout=0.1, bidi=True)
+embedding = torch.nn.Embedding(voc.num_words, hidden_size, padding_idx=PAD_token)
 
-optimiser = torch.optim.SGD(model.parameters(),
-                            lr=0.005)
+datagenerator = tud.DataLoader(trainset, **params)
+encoder = BaseGru(40, hidden_size, encoder_nlayers, dropout=0.1, bidi=True)
+decoder = AttentionDecoder(attn_model, embedding, hidden_size, hidden_size, 
+                           voc.num_labels, decoder_nlayers, dropout=dropout)
+
+
+encoder_optimiser = torch.optim.SGD(encoder.parameters(),
+                            lr=learning_rate)
+decoder_optimiser = torch.optim.SGD(decoder.parameters(),
+                            lr=learning_rate * decoder_learning_ratio)
+
 try:
 
     train_attention("traintest", "AN4", datagenerator, voc,
-                    encoder, decoder, encoder_optimiser, decoder_optimiser, "an4test", epochs=20, batch_size=bsz,
-                    print_every=2, save_every=0, clip=5.0, device=device)
+                    encoder, decoder, encoder_optimiser, decoder_optimiser, 
+                    "an4test", epochs=20, batch_size=bsz, 
+                    teacher_forcing_ratio=teacher_forcing_ratio,
+                    print_every=2, save_every=0, clip=clip, device=device)
 except KeyboardInterrupt:
     print('-' * 89)
     print('Exiting from training early')
