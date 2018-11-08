@@ -128,7 +128,7 @@ class Voc:
             self.add_word(word)
 
     def __len__(self):
-        return len(self.num_labels)
+        return self.num_labels
 
 
 def generate_char_voc(text_corpus, name, mode='ctc', space_map=['-']):

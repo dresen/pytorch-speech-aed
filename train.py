@@ -4,6 +4,8 @@
 import torch
 import os
 
+from tqdm import tqdm
+
 from utils.voc import PAD_token, SOS_token
 
 def maskNLLLoss(inp, target, mask):
@@ -64,37 +66,38 @@ def train_ctc(modelname, corpusname, dataset, voc,
     ctc = torch.nn.CTCLoss()
 
     model.to(device)
-    #    optimiser.to(device)
     ctc.to(device)
 
     print("training...")
-    for epoch in range(start_epoch, epochs + 1):
-        for xlens, ylens, xs, ys in dataset:
-            loss = ctc_iter(xs, xlens, ys, ylens, model, optimiser,
-                                  batch_size, len(voc), clip, device, ctc_loss=ctc)
+    with tqdm(total=total_iterations) as pbar:
+        for epoch in range(start_epoch, epochs + 1):
+            for xlens, ylens, xs, ys in dataset:
+                loss = ctc_iter(xs, xlens, ys, ylens, model, optimiser,
+                                    batch_size, len(voc), clip, device, ctc_loss=ctc)
 
-            print_loss += loss
+                print_loss += loss
 
-            # report progress
-            if iter % print_every == 0:
-                print_loss_avg = print_loss / print_every
-                print("Epoch {}; % complete: {:.1f}%; Average loss: {:.4f}".format(
-                      epoch, iter/total_iterations*100, print_loss_avg))
-                print_loss = 0 # reset ?
-            if bool(save_every):
-                if iter % save_every == 0:
-                    outdir = os.path.join(save_dir, modelname, corpusname, 
-                                        "{}l_{}hsz_{}drop".format(model.nlayers, model.hsz, model.dropout))
-                    if not os.path.exists(outdir):
-                        os.makedirs(outdir)
-                    torch.save({
-                        'epoch':epoch,
-                        'mdl':model.state_dict(),
-                        'opt':optimiser.state_dict(),
-                        'loss': loss,
-                        'voc': voc.__dict__,
-                    }, os.path.join(outdir, "{}-{}.tar".format(epoch, 'checkpoint')))
-            iter += 1
+                # report progress
+                if iter % print_every == 0:
+                    print_loss_avg = print_loss / print_every
+                    pbar.set_description("Epoch {}; Average loss: {:.4f}".format(
+                                         epoch, print_loss_avg))
+                    print_loss = 0 # reset ?
+                if bool(save_every):
+                    if iter % save_every == 0:
+                        outdir = os.path.join(save_dir, modelname, corpusname, 
+                                            "{}l_{}hsz_{}drop".format(model.nlayers, model.hsz, model.dropout))
+                        if not os.path.exists(outdir):
+                            os.makedirs(outdir)
+                        torch.save({
+                            'epoch':epoch,
+                            'mdl':model.state_dict(),
+                            'opt':optimiser.state_dict(),
+                            'loss': loss,
+                            'voc': voc.__dict__,
+                        }, os.path.join(outdir, "{}-{}.tar".format(epoch, 'checkpoint')))
+                iter += 1
+                pbar.update(1)
         
 
 
@@ -155,7 +158,7 @@ def attention_iter(input_sequences, inputlens, target_sequences, targetlens,
             ntotals += ntotal
     else:
         for step in range(max_targetlen):
-            print('1best', step)
+            # print('1best', step)
             dec_out, dec_hidden_state = decoder(dec_input, dec_hidden_state, enc_out)
             # Select best prediction
             _, onebest = dec_out.topk(1)
@@ -196,35 +199,37 @@ def train_attention(modelname, corpusname, dataset, voc,
     decoder.to(device)
 
     print("training...")
-    for epoch in range(start_epoch, epochs + 1):
-        for xlens, ylens, xs, ys in dataset:
-            loss = attention_iter(xs, xlens, ys, ylens, encoder, decoder, enc_optimiser, dec_optimiser,
-                                      batch_size, teacher_forcing_ratio, clip, device)
-            # Just used for reporting        
-            print_loss += loss
+    with tqdm(total=total_iterations) as pbar:
+        for epoch in range(start_epoch, epochs + 1):
+            for xlens, ylens, xs, ys in dataset:
+                loss = attention_iter(xs, xlens, ys, ylens, encoder, decoder, enc_optimiser, dec_optimiser,
+                                        batch_size, teacher_forcing_ratio, clip, device)
+                # Just used for reporting        
+                print_loss += loss
 
-            # report progress
-            if iter % print_every == 0:
-                print_loss_avg = print_loss / print_every
-                print("Epoch {}; Iter {}; % complete: {:.1f}%; Average loss: {:.4f}".format(
-                      epoch, iter, iter/total_iterations*100, print_loss_avg))
-                print_loss = 0 # reset ?
-            if bool(save_every):
-                if iter % save_every == 0:
-                    outdir = os.path.join(save_dir, modelname, corpusname, 
-                                        "{}l_{}hsz_{}drop".format(model.nlayers, model.hsz, model.dropout))
-                    if not os.path.exists(outdir):
-                        os.makedirs(outdir)
-                    torch.save({
-                        'epoch':epoch,
-                        'enc':encoder.state_dict(),
-                        'enc_opt':enc_optimiser.state_dict(),
-                        'dec':decoder.state_dict(),
-                        'dec_opt':dec_optimiser.state_dict(),
-                        'loss': loss,
-                        'voc': voc.__dict__,
-                    }, os.path.join(outdir, "{}-{}.tar".format(epoch, 'checkpoint')))
-            iter += 1
+                # report progress
+                if iter % print_every == 0:
+                    print_loss_avg = print_loss / print_every
+                    pbar.set_description("Epoch {}; Average loss: {:.4f}".format(
+                                         epoch, print_loss_avg))
+                    print_loss = 0 # reset ?
+                if bool(save_every):
+                    if iter % save_every == 0:
+                        outdir = os.path.join(save_dir, modelname, corpusname, 
+                                            "{}l_{}hsz_{}drop".format(model.nlayers, model.hsz, model.dropout))
+                        if not os.path.exists(outdir):
+                            os.makedirs(outdir)
+                        torch.save({
+                            'epoch':epoch,
+                            'enc':encoder.state_dict(),
+                            'enc_opt':enc_optimiser.state_dict(),
+                            'dec':decoder.state_dict(),
+                            'dec_opt':dec_optimiser.state_dict(),
+                            'loss': loss,
+                            'voc': voc.__dict__,
+                        }, os.path.join(outdir, "{}-{}.tar".format(epoch, 'checkpoint')))
+                iter += 1
+                pbar.update(1)
 
 
 if __name__ == "__main__":

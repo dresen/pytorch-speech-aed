@@ -20,16 +20,16 @@ USE_CUDA = torch.cuda.is_available()
 device = torch.device("cuda" if USE_CUDA else "cpu")
 
 
-clip = 50.0
-teacher_forcing_ratio = 1.0 # Debug option !!!
-learning_rate = 0.001
-decoder_learning_ratio = 5.0 # ???
+clip = 50.0  # Unsure whether this is a good value
+teacher_forcing_ratio = 1.0 # Not tuned
+learning_rate = 0.001       # Not tuned
+decoder_learning_ratio = 5.0 # 
 model_name = 'cb_model'
 attn_model = 'scaled_dot'
-hidden_size = 400
-encoder_nlayers = 2
-decoder_nlayers = 2
-dropout = 0.1
+hidden_size = 400	        # Not tuned
+encoder_nlayers = 2	        # Not tuned
+decoder_nlayers = 2	        # Not tuned
+dropout = 0.1	            # Not tuned
 batch_size = 8
 
 

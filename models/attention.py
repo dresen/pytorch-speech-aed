@@ -34,7 +34,7 @@ class Attention(nn.Module):
         return torch.sum(hidden * enc_output, dim=2)
 
     def scaled_dot_score(self, hidden, enc_output):
-        #untestet
+        # Scaled to handle the size of feature input
         return torch.div(torch.sum(hidden * enc_output, dim=2), sqrt(self.hsz))
 
     def general_score(self, hidden, enc_output):
