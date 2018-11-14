@@ -5,6 +5,7 @@ import torch
 import os
 
 from tqdm import tqdm
+from tensorboardX import SummaryWriter as summary_writer
 
 from utils.voc import PAD_token, SOS_token
 
@@ -68,6 +69,16 @@ def train_ctc(modelname, corpusname, dataset, voc,
     model.to(device)
     ctc.to(device)
 
+    avg_train_loss = 0.0
+
+    # Where to save the checkpoints and logs
+    outdir = os.path.join(save_dir, modelname, corpusname, "{}l_{}hsz_{}drop".format(model.nlayers,
+                                                                                     model.hsz,
+                                                                                     model.dropout))
+    os.makedirs(outdir, exist_ok=True)
+    # TensorboardX 
+    logx = summary_writer(outdir, comment='CTCdev')
+
     print("training...")
     with tqdm(total=total_iterations) as pbar:
         for epoch in range(start_epoch, epochs + 1):
@@ -80,15 +91,12 @@ def train_ctc(modelname, corpusname, dataset, voc,
                 # report progress
                 if iter % print_every == 0:
                     print_loss_avg = print_loss / print_every
+                    avg_train_loss += print_loss_avg
                     pbar.set_description("Epoch {}; Average loss: {:.4f}".format(
                                          epoch, print_loss_avg))
                     print_loss = 0 # reset ?
                 if bool(save_every):
                     if iter % save_every == 0:
-                        outdir = os.path.join(save_dir, modelname, corpusname, 
-                                            "{}l_{}hsz_{}drop".format(model.nlayers, model.hsz, model.dropout))
-                        if not os.path.exists(outdir):
-                            os.makedirs(outdir)
                         torch.save({
                             'epoch':epoch,
                             'mdl':model.state_dict(),
@@ -98,6 +106,15 @@ def train_ctc(modelname, corpusname, dataset, voc,
                         }, os.path.join(outdir, "{}-{}.tar".format(epoch, 'checkpoint')))
                 iter += 1
                 pbar.update(1)
+
+            # Ending each epoch, log model params and other info
+            values = {"Avg Train Loss": avg_train_loss}
+            logx.add_scalars("scalars", values, global_step=epoch)
+            for tag, val in model.named_parameters():
+                tag = tag.replace('.', '/')
+                logx.add_histogram(tag, val.detach().numpy(), iter)
+                logx.add_histogram(tag + '/grad', val.grad, iter)
+    print("To visualise training, run: tensorboard --logdir={} --host localhost --port 8088".format(outdir))
         
 
 
@@ -198,6 +215,19 @@ def train_attention(modelname, corpusname, dataset, voc,
     encoder.to(device)
     decoder.to(device)
 
+
+    avg_train_loss = 0.0
+
+    # Where to save the checkpoints and logs
+    # encoder and decoder has the same dropout for now
+    outdir = os.path.join(save_dir, modelname, corpusname, 
+                          "{0}-{1}l_{2}-{3}hsz_{4}drop".format(encoder.nlayers, decoder.nlayers,
+                                                           encoder.hsz, decoder.hsz, encoder.dropout))
+    os.makedirs(outdir, exist_ok=True)
+    # TensorboardX 
+    logx = summary_writer(outdir, comment='ATTNdev')
+
+
     print("training...")
     with tqdm(total=total_iterations) as pbar:
         for epoch in range(start_epoch, epochs + 1):
@@ -206,19 +236,16 @@ def train_attention(modelname, corpusname, dataset, voc,
                                         batch_size, teacher_forcing_ratio, clip, device)
                 # Just used for reporting        
                 print_loss += loss
-
+                logx.add_scalar('Train/Loss/Batch', loss.item(), global_step=iter)
                 # report progress
                 if iter % print_every == 0:
                     print_loss_avg = print_loss / print_every
                     pbar.set_description("Epoch {}; Average loss: {:.4f}".format(
                                          epoch, print_loss_avg))
+                    avg_train_loss += print_loss_avg
                     print_loss = 0 # reset ?
                 if bool(save_every):
                     if iter % save_every == 0:
-                        outdir = os.path.join(save_dir, modelname, corpusname, 
-                                            "{}l_{}hsz_{}drop".format(model.nlayers, model.hsz, model.dropout))
-                        if not os.path.exists(outdir):
-                            os.makedirs(outdir)
                         torch.save({
                             'epoch':epoch,
                             'enc':encoder.state_dict(),
@@ -230,6 +257,17 @@ def train_attention(modelname, corpusname, dataset, voc,
                         }, os.path.join(outdir, "{}-{}.tar".format(epoch, 'checkpoint')))
                 iter += 1
                 pbar.update(1)
+
+            # Ending each epoch, log model params and other info
+            values = {"Train/Loss/Avg": avg_train_loss}
+            logx.add_scalars("scalars", values, global_step=epoch)
+            for model in (('ENC', encoder), ('DEC', decoder)):
+                for tag, val in model.named_parameters():
+                    tag = tag.replace('.', '/')
+                    logx.add_histogram(tag, val.detach().numpy(), iter)
+                    logx.add_histogram(tag + '/grad', val.grad, iter)
+
+    print("To visualise training, run: tensorboard --logdir={} --host localhost --port 8088".format(outdir))
 
 
 if __name__ == "__main__":
